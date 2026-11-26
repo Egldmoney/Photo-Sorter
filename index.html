@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Photo Sorter</title>
+<style>
+  :root{
+    --bg:#0e0f12; --panel:#15171c; --panel2:#1b1e25; --line:#262a33;
+    --txt:#e6e8ee; --dim:#8d95a6; --accent:#5fa8ff; --keep:#3ddc97;
+    --rej:#ff6b6b; --warn:#ffb454; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--txt);
+    font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  button{
+    font:inherit;color:var(--txt);background:var(--panel2);
+    border:1px solid var(--line);border-radius:7px;padding:7px 12px;cursor:pointer;
+  }
+  button:hover:not(:disabled){border-color:#3a414f;background:#232732}
+  button:disabled{opacity:.4;cursor:default}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#06101d;font-weight:600}
+  button.primary:hover:not(:disabled){background:#7cbaff}
+  button.danger{border-color:#5a2b2b;color:#ff8f8f}
+  .row{display:flex;align-items:center;gap:8px}
+
+  header{
+    padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel);
+    display:flex;gap:14px;align-items:center;flex-wrap:wrap;flex:0 0 auto;
+  }
+  .brand{font-weight:700;letter-spacing:.3px;margin-right:4px}
+  .brand span{color:var(--accent)}
+  .pathchip{
+    font:12px/1.3 var(--mono);color:var(--dim);background:var(--panel2);
+    border:1px solid var(--line);border-radius:6px;padding:5px 9px;
+    max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .pathchip b{color:var(--txt);font-weight:500}
+  label.toggle{display:flex;gap:6px;align-items:center;color:var(--dim);font-size:13px;cursor:pointer}
+
+  main{flex:1 1 auto;display:flex;min-height:0}
+  aside{
+    width:232px;flex:0 0 auto;border-right:1px solid var(--line);background:var(--panel);
+    overflow:auto;padding:8px;
+  }
+  .bk{
+    display:block;width:100%;text-align:left;background:transparent;border:1px solid transparent;
+    border-radius:7px;padding:8px 9px;margin-bottom:3px;
+  }
+  .bk:hover{background:var(--panel2);border-color:transparent}
+  .bk.on{background:var(--panel2);border-color:#2f3647}
+  .bk .t{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .bk .n{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bk .c{font:12px var(--mono);color:var(--dim)}
+  .bk .s{font-size:11px;color:var(--dim);margin-top:3px}
+  .bk .s i{font-style:normal}
+  .grp{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#5d6475;padding:12px 9px 5px}
+
+  section.work{flex:1 1 auto;display:flex;flex-direction:column;min-width:0}
+  .bar{
+    padding:8px 14px;border-bottom:1px solid var(--line);display:flex;gap:10px;
+    align-items:center;flex-wrap:wrap;flex:0 0 auto;background:var(--panel);
+  }
+  .bar h2{font-size:14px;margin:0;font-weight:600}
+  .bar .hint{color:var(--dim);font-size:12px}
+  .spacer{flex:1 1 auto}
+
+  .grid{
+    flex:1 1 auto;overflow:auto;padding:12px;display:grid;align-content:start;
+    grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px;
+  }
+  .card{
+    position:relative;background:var(--panel2);border:2px solid var(--line);border-radius:9px;
+    overflow:hidden;cursor:pointer;aspect-ratio:1;
+  }
+  .card.keep{border-color:var(--keep)}
+  .card.reject{border-color:var(--rej);opacity:.55}
+  .card.cur{outline:2px solid var(--accent);outline-offset:2px}
+  .card img{width:100%;height:100%;object-fit:cover;display:block}
+  .card .ph{
+    width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+    color:#4a5162;font:11px var(--mono);text-align:center;padding:8px;
+  }
+  .card .meta{
+    position:absolute;left:0;right:0;bottom:0;padding:16px 6px 4px;
+    background:linear-gradient(transparent,rgba(0,0,0,.85));
+    font:10px/1.3 var(--mono);color:#cbd2e0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .tag{
+    position:absolute;top:5px;left:5px;font:10px/1 var(--mono);padding:3px 5px;
+    border-radius:4px;background:rgba(0,0,0,.7);color:var(--warn);
+  }
+  .mark{
+    position:absolute;top:5px;right:5px;width:19px;height:19px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#06101d;
+  }
+  .mark.k{background:var(--keep)}
+  .mark.r{background:var(--rej)}
+
+  .empty{padding:40px;color:var(--dim);text-align:center;grid-column:1/-1}
+
+  footer{
+    flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel);
+    padding:9px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+  }
+  .prog{height:5px;background:var(--panel2);border-radius:3px;overflow:hidden;flex:1 1 180px;min-width:120px}
+  .prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+  .stat{font:12px var(--mono);color:var(--dim)}
+  .stat b{color:var(--txt);font-weight:500}
+
+  dialog{
+    border:none;background:transparent;padding:0;max-width:100vw;max-height:100vh;
+  }
+  dialog::backdrop{background:rgba(5,6,9,.93)}
+  .view{display:flex;flex-direction:column;width:94vw;height:92vh;gap:8px}
+  .view .stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0}
+  .view img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
+  .view .info{font:12px var(--mono);color:var(--dim);text-align:center}
+  .view .ctl{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+
+  .log{
+    font:11px/1.5 var(--mono);color:var(--dim);background:#0a0b0e;border:1px solid var(--line);
+    border-radius:7px;padding:8px;max-height:150px;overflow:auto;white-space:pre-wrap;margin:0 14px 10px;
+  }
+  .log .ok{color:var(--keep)} .log .er{color:var(--rej)}
+  .hide{display:none !important}
+  .intro{max-width:680px;margin:7vh auto;padding:0 20px;color:var(--dim)}
+  .intro h1{color:var(--txt);font-size:22px;margin:0 0 6px}
+  .intro ol{padding-left:20px;line-height:1.8}
+  .intro code{font:12px var(--mono);background:var(--panel2);padding:2px 5px;border-radius:4px;color:#cbd2e0}
+  .intro .warnbox{border-left:3px solid var(--warn);padding:8px 12px;margin:16px 0;background:var(--panel)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Photo<span>Sorter</span></div>
+  <button id="btnSrc">1 · Source folder</button>
+  <div class="pathchip" id="chipSrc">none</div>
+  <button id="btnDst">2 · Destination</button>
+  <div class="pathchip" id="chipDst">none</div>
+  <button id="btnScan" class="primary" disabled>3 · Scan</button>
+  <div class="spacer"></div>
+  <label class="toggle"><input type="checkbox" id="optMove"> Move (delete from source)</label>
+  <button id="btnHelp">?</button>
+</header>
+
+<div class="intro" id="intro">
+  <h1>Empty your phone in two steps.</h1>
+  <p>This page runs entirely in your browser. Nothing is uploaded anywhere — it reads and writes files directly on this computer via the File System Access API. Needs desktop Chrome or Edge.</p>
+  <ol>
+    <li>Plug the phone in with USB, set it to <b>File transfer</b>, and drag <code>Internal storage/DCIM</code> (plus <code>Pictures</code> and <code>Download</code> if you want them) into a folder on this computer. Or, faster: <code>adb pull /sdcard/DCIM ./phone-dump</code></li>
+    <li>Pick that folder as the <b>Source</b> above, pick where the sorted library should live as the <b>Destination</b>, and hit <b>Scan</b>.</li>
+  </ol>
+  <p>The scan reads EXIF dates, groups by month, isolates screenshots, WhatsApp images, videos and byte-identical duplicates, and pre-rejects the junk. You review, then it writes everything into <code>YYYY/YYYY-MM/</code> folders.</p>
+  <div class="warnbox">Rejected files are never deleted — they go to <code>_Rejected/</code> so you can check before emptying it. "Move" mode only removes a source file after the copy has been written and its size verified.</div>
+  <p><b>Keys:</b> arrows move · <kbd>K</kbd> keep · <kbd>D</kbd> reject · <kbd>Enter</kbd> big view · <kbd>A</kbd> keep whole group · <kbd>R</kbd> reject whole group</p>
+</div>
+
+<main id="app" class="hide">
+  <aside id="side"></aside>
+  <section class="work">
+    <div class="bar">
+      <h2 id="bkTitle">—</h2>
+      <span class="hint" id="bkHint"></span>
+      <div class="spacer"></div>
+      <button id="btnAll">Keep all (A)</button>
+      <button id="btnNone" class="danger">Reject all (R)</button>
+      <button id="btnForget" title="Discard remembered keep/reject decisions">Reset decisions</button>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+
+<pre class="log hide" id="log"></pre>
+
+<footer id="foot" class="hide">
+  <div class="stat" id="stats">—</div>
+  <div class="spacer"></div>
+  <div class="prog"><i id="progBar"></i></div>
+  <button id="btnRun" class="primary">Organise files →</button>
+</footer>
+
+<dialog id="viewer">
+  <div class="view">
+    <div class="stage" id="vStage"></div>
+    <div class="info" id="vInfo"></div>
+    <div class="ctl">
+      <button id="vPrev">← Prev</button>
+      <button id="vKeep" class="primary">Keep (K)</button>
+      <button id="vRej" class="danger">Reject (D)</button>
+      <button id="vNext">Next →</button>
+      <button id="vClose">Close (Esc)</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+
+/* ---------- state ---------- */
+const S = {
+  srcHandle:null, dstHandle:null,
+  items:[],            // {name,path,size,mtime,file:FileHandle,parent:DirHandle,kind,date,dateSrc,bucket,status,dupOf,fp}
+  buckets:new Map(),   // key -> {key,label,group,ids:[]}
+  activeBucket:null,
+  cursor:0,
+  busy:false,
+};
+
+const VIDEO = /\.(mp4|mov|3gp|3gpp|mkv|avi|webm|m4v|mts)$/i;
+const IMAGE = /\.(jpe?g|png|heic|heif|webp|gif|bmp|dng|tiff?|avif)$/i;
+const NOPREVIEW = /\.(heic|heif|dng|tiff?)$/i;
+
+const $ = id => document.getElementById(id);
+const log = (msg, cls='') => {
+  const el = $('log'); el.classList.remove('hide');
+  el.insertAdjacentHTML('beforeend', `<span class="${cls}">${msg}</span>\n`);
+  el.scrollTop = el.scrollHeight;
+};
+const fmtSize = b => b > 1073741824 ? (b/1073741824).toFixed(2)+' GB'
+                  : b > 1048576 ? (b/1048576).toFixed(1)+' MB'
+                  : (b/1024).toFixed(0)+' KB';
+const pad = n => String(n).padStart(2,'0');
+
+/* ---------- EXIF (minimal: DateTimeOriginal / DateTime) ---------- */
+async function exifDate(file){
+  let buf;
+  try { buf = await file.slice(0, 131072).arrayBuffer(); } catch(e){ return null; }
+  const dv = new DataView(buf);
+  if (dv.byteLength < 12 || dv.getUint16(0) !== 0xFFD8) return null;
+  let off = 2;
+  while (off + 4 <= dv.byteLength) {
+    if (dv.getUint8(off) !== 0xFF) { off++; continue; }
+    const marker = dv.getUint8(off+1);
+    if (marker === 0xD9 || marker === 0xDA) break;
+    if (marker === 0x01 || (marker >= 0xD0 && marker <= 0xD8)) { off += 2; continue; }
+    const seg = dv.getUint16(off+2);
+    if (marker === 0xE1 && off+10 <= dv.byteLength
+        && dv.getUint32(off+4) === 0x45786966 && dv.getUint16(off+8) === 0x0000) {
+      return parseTiff(dv, off+10);
+    }
+    if (seg < 2) break;
+    off += 2 + seg;
+  }
+  return null;
+}
+function parseTiff(dv, base){
+  try {
+    if (base + 8 > dv.byteLength) return null;
+    const le = dv.getUint16(base) === 0x4949;
+    const g16 = o => dv.getUint16(o, le);
+    const g32 = o => dv.getUint32(o, le);
+    if (g16(base+2) !== 0x002A) return null;
+    const ascii = (valOff, count) => {
+      const p = count <= 4 ? valOff : base + g32(valOff);
+      let s = '';
+      for (let i=0;i<count-1;i++){
+        if (p+i >= dv.byteLength) break;
+        const c = dv.getUint8(p+i); if (!c) break; s += String.fromCharCode(c);
+      }
+      return s;
+    };
+    const walk = (ifd, cb) => {
+      if (ifd + 2 > dv.byteLength) return;
+      const n = g16(ifd);
+      for (let i=0;i<n;i++){
+        const e = ifd + 2 + i*12;
+        if (e + 12 > dv.byteLength) return;
+        cb(g16(e), g32(e+4), e+8);
+      }
+    };
+    let dt = null, sub = null;
+    walk(base + g32(base+4), (tag, count, valOff) => {
+      if (tag === 0x8769) sub = base + g32(valOff);
+      else if (tag === 0x0132) dt = ascii(valOff, count);
+    });
+    if (sub) walk(sub, (tag, count, valOff) => {
+      if (tag === 0x9003) { const v = ascii(valOff, count); if (v) dt = v; }
+    });
+    if (!dt) return null;
+    const m = dt.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+    if (!m) return null;
+    const d = new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]);
+    return isNaN(d) || d.getFullYear() < 1995 ? null : d;
+  } catch(e){ return null; }
+}
+function nameDate(name){
+  const m = name.match(/(20\d{2})[-_.]?(0\d|1[0-2])[-_.]?([0-2]\d|3[01])(?:[-_. T]?([01]\d|2[0-3])[-_.:]?([0-5]\d)[-_.:]?([0-5]\d)?)?/);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2]-1, +m[3], +(m[4]||12), +(m[5]||0), +(m[6]||0));
+  return isNaN(d) ? null : d;
+}
+
+/* ---------- classification ---------- */
+function classify(name, path){
+  const p = (path + '/' + name).toLowerCase();
+  if (VIDEO.test(name)) return 'video';
+  if (!IMAGE.test(name)) return 'other';
+  if (/screenshot|screen_shot|screencap/.test(p)) return 'screenshot';
+  if (/wa\d{4}\./i.test(name) || /whatsapp/.test(p)) return 'whatsapp';
+  if (/telegram|messenger|viber|signal|instagram|facebook|snapchat|tiktok/.test(p)) return 'social';
+  if (/download|browser|saved|sticker|meme/.test(p)) return 'download';
+  return 'photo';
+}
+const JUNKY = new Set(['screenshot','whatsapp','social','download']);
+
+/* ---------- folder pickers ---------- */
+$('btnSrc').onclick = async () => {
+  try {
+    S.srcHandle = await window.showDirectoryPicker({ id:'src', mode:'readwrite' });
+    $('chipSrc').innerHTML = '<b>' + S.srcHandle.name + '</b>';
+    ready();
+  } catch(e){ if (e.name !== 'AbortError') alert(e.message); }
+};
+$('btnDst').onclick = async () => {
+  try {
+    S.dstHandle = await window.showDirectoryPicker({ id:'dst', mode:'readwrite' });
+    $('chipDst').innerHTML = '<b>' + S.dstHandle.name + '</b>';
+    ready();
+  } catch(e){ if (e.name !== 'AbortError') alert(e.message); }
+};
+async function ready(){
+  $('btnScan').disabled = true;
+  if (!(S.srcHandle && S.dstHandle)) return;
+  const problem = await folderClash();
+  if (problem) { $('chipDst').innerHTML = '<b style="color:var(--rej)">' + problem + '</b>'; return; }
+  $('btnScan').disabled = false;
+}
+// Destination must not sit inside the source (or vice versa): in Move mode that
+// means re-scanning our own output while deleting the originals.
+async function folderClash(){
+  try {
+    if (await S.srcHandle.isSameEntry(S.dstHandle)) return 'Same folder as source';
+    if (await S.srcHandle.resolve(S.dstHandle)) return 'Inside the source folder — pick one outside';
+    if (await S.dstHandle.resolve(S.srcHandle)) return 'Contains the source folder — pick another';
+  } catch(e){ return null; }
+  return null;
+}
+$('btnHelp').onclick = () => {
+  $('intro').classList.toggle('hide');
+  if (S.items.length) $('app').classList.toggle('hide', !$('intro').classList.contains('hide'));
+};
+
+if (!window.showDirectoryPicker) {
+  $('intro').insertAdjacentHTML('afterbegin',
+    '<div class="warnbox" style="border-color:var(--rej)"><b>This browser can\'t do it.</b> ' +
+    'Folder access needs Chrome or Edge on desktop. Safari, Firefox and all mobile browsers are out.</div>');
+  $('btnSrc').disabled = $('btnDst').disabled = true;
+}
+
+/* ---------- scan ---------- */
+$('btnScan').onclick = async () => {
+  if (S.busy) return;
+  S.busy = true;
+  $('btnScan').disabled = true;
+  $('log').textContent = '';
+  log('Walking ' + S.srcHandle.name + ' …');
+
+  S.items = [];
+  try {
+    await walk(S.srcHandle, '');
+  } catch(e){ log('Scan failed: ' + e.message, 'er'); S.busy = false; $('btnScan').disabled = false; return; }
+
+  log('Found ' + S.items.length + ' media files. Reading dates …');
+
+  // dates
+  let n = 0;
+  for (const it of S.items) {
+    if (/\.jpe?g$/i.test(it.name)) {
+      const f = await it.file.getFile();
+      const d = await exifDate(f);
+      if (d) { it.date = d; it.dateSrc = 'exif'; }
+    }
+    if (!it.date) {
+      const d = nameDate(it.name);
+      if (d) { it.date = d; it.dateSrc = 'name'; }
+      else { it.date = new Date(it.mtime); it.dateSrc = 'file'; }
+    }
+    if (++n % 200 === 0) { progress(n / S.items.length * 0.6); await tick(); }
+  }
+
+  log('Fingerprinting for duplicates …');
+  await findDupes();
+  progress(1);
+
+  buildBuckets();
+  const resumed = restoreDecisions();
+  if (resumed) log('Restored ' + resumed + ' remembered decisions from a previous session.', 'ok');
+  $('intro').classList.add('hide');
+  $('app').classList.remove('hide');
+  $('foot').classList.remove('hide');
+  renderSide();
+  selectBucket([...S.buckets.keys()][0]);
+  log('Ready. ' + stats().keep + ' marked keep, ' + stats().rej + ' pre-rejected.', 'ok');
+  S.busy = false;
+  $('btnScan').disabled = false;
+};
+
+async function walk(dir, path, depth = 0){
+  if (depth > 8) return;
+  for await (const entry of dir.values()) {
+    if (entry.kind === 'directory') {
+      if (/^(\.|_Rejected$|_Duplicates$)/.test(entry.name)) continue;
+      await walk(entry, path ? path + '/' + entry.name : entry.name, depth + 1);
+    } else {
+      if (!IMAGE.test(entry.name) && !VIDEO.test(entry.name)) continue;
+      if (entry.name.startsWith('.')) continue;
+      let f;
+      try { f = await entry.getFile(); } catch(e){ continue; }
+      if (f.size === 0) continue;
+      S.items.push({
+        id:S.items.length, name:entry.name, path, size:f.size, mtime:f.lastModified,
+        file:entry, parent:dir, kind:classify(entry.name, path),
+        date:null, dateSrc:null, bucket:null, status:'keep', dupOf:null, fp:null, url:null
+      });
+      if (S.items.length % 500 === 0) { log('  … ' + S.items.length + ' files'); await tick(); }
+    }
+  }
+}
+
+async function findDupes(){
+  const bySize = new Map();
+  for (const it of S.items) {
+    if (!bySize.has(it.size)) bySize.set(it.size, []);
+    bySize.get(it.size).push(it);
+  }
+  for (const [size, group] of bySize) {
+    if (group.length < 2) continue;
+    const byHash = new Map();
+    for (const it of group) {
+      try {
+        const f = await it.file.getFile();
+        const buf = await f.slice(0, Math.min(1048576, size)).arrayBuffer();
+        const h = await crypto.subtle.digest('SHA-256', buf);
+        it.fp = size + ':' + [...new Uint8Array(h).slice(0,10)].map(b=>b.toString(16).padStart(2,'0')).join('');
+      } catch(e){ it.fp = 'size:' + size + ':' + it.id; }
+      if (!byHash.has(it.fp)) byHash.set(it.fp, []);
+      byHash.get(it.fp).push(it);
+    }
+    for (const copies of byHash.values()) {
+      if (copies.length < 2) continue;
+      // keep the one with the best date source, then shortest path
+      copies.sort((a,b) => {
+        const rank = x => x.dateSrc === 'exif' ? 0 : x.dateSrc === 'name' ? 1 : 2;
+        return rank(a) - rank(b) || a.path.length - b.path.length || a.name.localeCompare(b.name);
+      });
+      for (let i=1;i<copies.length;i++){
+        copies[i].dupOf = copies[0].id;
+        copies[i].status = 'reject';
+      }
+    }
+    await tick();
+  }
+}
+
+/* ---------- buckets ---------- */
+function buildBuckets(){
+  S.buckets = new Map();
+  const add = (key, label, group, it) => {
+    if (!S.buckets.has(key)) S.buckets.set(key, { key, label, group, ids:[] });
+    S.buckets.get(key).ids.push(it.id);
+    it.bucket = key;
+  };
+  const dupes = [], junk = { screenshot:[], whatsapp:[], social:[], download:[] }, vids = [], months = new Map();
+
+  for (const it of S.items) {
+    if (it.dupOf !== null) { dupes.push(it); continue; }
+    if (JUNKY.has(it.kind)) { junk[it.kind].push(it); continue; }
+    if (it.kind === 'video') { vids.push(it); continue; }
+    const k = it.date.getFullYear() + '-' + pad(it.date.getMonth()+1);
+    if (!months.has(k)) months.set(k, []);
+    months.get(k).push(it);
+  }
+
+  if (dupes.length) dupes.forEach(it => add('dupes', 'Duplicates', 'Needs a look', it));
+  const junkNames = { screenshot:'Screenshots', whatsapp:'WhatsApp images', social:'Social / chat apps', download:'Downloads & stickers' };
+  for (const k of Object.keys(junk)) {
+    if (!junk[k].length) continue;
+    junk[k].forEach(it => { it.status = 'reject'; add('junk-'+k, junkNames[k], 'Needs a look', it); });
+  }
+  if (vids.length) vids.forEach(it => add('videos', 'Videos', 'Media', it));
+  [...months.keys()].sort().reverse().forEach(k => {
+    const d = new Date(+k.slice(0,4), +k.slice(5,7)-1, 1);
+    const label = d.toLocaleString('en-GB', { month:'long', year:'numeric' });
+    months.get(k).sort((a,b) => a.date - b.date).forEach(it => add('m-'+k, label, 'Photos by month', it));
+  });
+}
+
+function renderSide(){
+  const groups = new Map();
+  for (const b of S.buckets.values()) {
+    if (!groups.has(b.group)) groups.set(b.group, []);
+    groups.get(b.group).push(b);
+  }
+  let html = '';
+  for (const [g, list] of groups) {
+    html += `<div class="grp">${g}</div>`;
+    for (const b of list) {
+      const k = b.ids.filter(i => S.items[i].status === 'keep').length;
+      const r = b.ids.length - k;
+      html += `<button class="bk ${b.key===S.activeBucket?'on':''}" data-k="${b.key}">
+        <div class="t"><span class="n">${esc(b.label)}</span><span class="c">${b.ids.length}</span></div>
+        <div class="s"><i style="color:var(--keep)">${k} keep</i> · <i style="color:${r?'var(--rej)':'var(--dim)'}">${r} reject</i></div>
+      </button>`;
+    }
+  }
+  $('side').innerHTML = html;
+  $('side').querySelectorAll('.bk').forEach(el => el.onclick = () => selectBucket(el.dataset.k));
+  renderStats();
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function selectBucket(key){
+  S.activeBucket = key; S.cursor = 0;
+  const b = S.buckets.get(key);
+  $('bkTitle').textContent = b.label;
+  const hints = {
+    dupes:'Byte-identical copies. The best copy of each is kept in its month folder; these extras are pre-rejected.',
+    videos:'Big files. Reject the ones you will never watch.',
+  };
+  $('bkHint').textContent = hints[key] || (key.startsWith('junk-')
+    ? 'Pre-rejected as clutter — press A if you want to keep them after all.'
+    : b.ids.length + ' files · ' + fmtSize(b.ids.reduce((s,i)=>s+S.items[i].size,0)));
+  renderGrid();
+  renderSide();
+}
+
+/* ---------- grid ---------- */
+let io = null;
+function renderGrid(){
+  const b = S.buckets.get(S.activeBucket);
+  const grid = $('grid');
+  if (io) io.disconnect();
+  clearThumbs();
+  grid.innerHTML = b.ids.map((id, idx) => {
+    const it = S.items[id];
+    const tag = it.dupOf !== null ? 'dup' : (it.kind === 'photo' ? '' : it.kind);
+    return `<div class="card ${it.status} ${idx===0?'cur':''}" data-id="${id}" data-idx="${idx}">
+      <div class="ph">${NOPREVIEW.test(it.name) ? 'no preview<br>'+esc(it.name.split('.').pop().toUpperCase()) : (it.kind==='video'?'▶ video':'…')}</div>
+      ${tag?`<span class="tag">${tag}</span>`:''}
+      <span class="mark ${it.status==='keep'?'k':'r'}">${it.status==='keep'?'✓':'✕'}</span>
+      <div class="meta">${esc(it.name)}<br>${fmtSize(it.size)} · ${it.date.toLocaleDateString('en-GB')}</div>
+    </div>`;
+  }).join('') || '<div class="empty">Nothing here.</div>';
+
+  grid.querySelectorAll('.card').forEach(el => {
+    el.onclick = e => { S.cursor = +el.dataset.idx; if (e.shiftKey) toggle(+el.dataset.id); else openViewer(); markCursor(); };
+  });
+
+  io = new IntersectionObserver(entries => {
+    for (const en of entries) {
+      if (!en.isIntersecting) continue;
+      io.unobserve(en.target);
+      loadThumb(en.target);
+    }
+  }, { root:grid, rootMargin:'300px' });
+  grid.querySelectorAll('.card').forEach(el => io.observe(el));
+  grid.scrollTop = 0;
+}
+
+/* Thumbnails are blob URLs in an LRU, not data URLs in the DOM: a full phone
+   dump is thousands of files and base64 in markup never gets freed. */
+const thumbs = new Map();          // id -> blobURL, insertion order = oldest first
+const THUMB_CAP = 400;
+
+async function loadThumb(card){
+  const id = +card.dataset.id;
+  const it = S.items[id];
+  if (NOPREVIEW.test(it.name) || it.kind === 'video') return;
+  if (thumbs.has(id)) { showImg(card, thumbs.get(id)); return; }
+  try {
+    const f = await it.file.getFile();
+    const bmp = await createImageBitmap(f, { resizeWidth:300, resizeQuality:'low' });
+    const cv = document.createElement('canvas');
+    cv.width = bmp.width; cv.height = bmp.height;
+    cv.getContext('2d').drawImage(bmp, 0, 0);
+    bmp.close();
+    const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.72));
+    cv.width = cv.height = 0;
+    if (!blob) throw new Error('encode failed');
+    const url = URL.createObjectURL(blob);
+    thumbs.set(id, url);
+    trimThumbs();
+    showImg(card, url);
+  } catch(e){ const ph = card.querySelector('.ph'); if (ph) ph.textContent = 'unreadable'; }
+}
+function showImg(card, url){
+  const ph = card.querySelector('.ph');
+  if (ph) ph.outerHTML = `<img src="${url}" alt="">`;
+  else { const img = card.querySelector('img'); if (img) img.src = url; }
+}
+function trimThumbs(){
+  while (thumbs.size > THUMB_CAP) {
+    const [id, url] = thumbs.entries().next().value;
+    thumbs.delete(id);
+    URL.revokeObjectURL(url);
+    const card = $('grid').querySelector(`.card[data-id="${id}"]`);
+    if (card) {
+      const img = card.querySelector('img');
+      if (img) img.outerHTML = '<div class="ph">…</div>';
+      if (io) io.observe(card);   // reloads if the user scrolls back
+    }
+  }
+}
+function clearThumbs(){
+  for (const url of thumbs.values()) URL.revokeObjectURL(url);
+  thumbs.clear();
+}
+
+function markCursor(){
+  const grid = $('grid');
+  grid.querySelectorAll('.card.cur').forEach(el => el.classList.remove('cur'));
+  const el = grid.querySelector(`.card[data-idx="${S.cursor}"]`);
+  if (el) { el.classList.add('cur'); el.scrollIntoView({ block:'nearest' }); }
+}
+function paint(id){
+  const it = S.items[id];
+  const el = $('grid').querySelector(`.card[data-id="${id}"]`);
+  if (!el) return;
+  el.classList.toggle('keep', it.status === 'keep');
+  el.classList.toggle('reject', it.status === 'reject');
+  const m = el.querySelector('.mark');
+  m.className = 'mark ' + (it.status === 'keep' ? 'k' : 'r');
+  m.textContent = it.status === 'keep' ? '✓' : '✕';
+}
+/* Remembered decisions: triaging a full phone takes more than one sitting, and a
+   closed tab must not cost it. Keyed on name+size+mtime, so it survives a rescan. */
+const DKEY = 'photosorter.decisions.v1';
+const sig = it => it.name + '|' + it.size + '|' + it.mtime;
+let saveTimer = null;
+function saveDecisions(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      const o = {};
+      for (const it of S.items) o[sig(it)] = it.status;
+      localStorage.setItem(DKEY, JSON.stringify(o));
+    } catch(e){ /* private mode or quota — triage still works, just not resumable */ }
+  }, 700);
+}
+function restoreDecisions(){
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(DKEY) || '{}'); } catch(e){ return 0; }
+  let n = 0;
+  for (const it of S.items) {
+    const st = saved[sig(it)];
+    if (st && st !== it.status) { it.status = st; n++; }
+    else if (st) n++;
+  }
+  return n;
+}
+$('btnForget').onclick = () => {
+  if (!confirm('Discard remembered keep/reject decisions and start the triage fresh?')) return;
+  try { localStorage.removeItem(DKEY); } catch(e){}
+  buildBuckets();
+  renderSide();
+  selectBucket(S.activeBucket && S.buckets.has(S.activeBucket) ? S.activeBucket : [...S.buckets.keys()][0]);
+  log('Decisions reset to the defaults from the scan.');
+};
+
+function setStatus(id, st){ S.items[id].status = st; paint(id); renderSide(); saveDecisions(); }
+function toggle(id){ setStatus(id, S.items[id].status === 'keep' ? 'reject' : 'keep'); }
+
+function curId(){
+  const b = S.buckets.get(S.activeBucket);
+  return b && b.ids.length ? b.ids[Math.min(S.cursor, b.ids.length-1)] : null;
+}
+function move(delta){
+  const b = S.buckets.get(S.activeBucket);
+  if (!b || !b.ids.length) return;
+  S.cursor = Math.max(0, Math.min(b.ids.length-1, S.cursor + delta));
+  markCursor();
+  if ($('viewer').open) showViewer();
+}
+function cols(){
+  const grid = $('grid');
+  return Math.max(1, Math.floor(grid.clientWidth / (grid.querySelector('.card')?.offsetWidth || 142)));
+}
+
+$('btnAll').onclick = () => bulk('keep');
+$('btnNone').onclick = () => bulk('reject');
+function bulk(st){
+  const b = S.buckets.get(S.activeBucket);
+  b.ids.forEach(id => { S.items[id].status = st; paint(id); });
+  renderSide();
+  saveDecisions();
+}
+
+document.addEventListener('keydown', e => {
+  if (S.busy || !S.items.length) return;
+  const open = $('viewer').open;
+  const k = e.key.toLowerCase();
+  if (k === 'escape' && open) { $('viewer').close(); return; }
+  if (['arrowright','arrowleft','arrowup','arrowdown','k','d',' ','enter','a','r'].includes(k)) e.preventDefault();
+  if (k === 'arrowright') move(1);
+  else if (k === 'arrowleft') move(-1);
+  else if (k === 'arrowdown') move(open ? 1 : cols());
+  else if (k === 'arrowup') move(open ? -1 : -cols());
+  else if (k === 'k') { const id = curId(); if (id !== null) { setStatus(id,'keep'); move(1); } }
+  else if (k === 'd') { const id = curId(); if (id !== null) { setStatus(id,'reject'); move(1); } }
+  else if (k === ' ') { const id = curId(); if (id !== null) toggle(id); }
+  else if (k === 'enter' && !open) openViewer();
+  else if (k === 'a') bulk('keep');
+  else if (k === 'r') bulk('reject');
+});
+
+/* ---------- viewer ---------- */
+function openViewer(){ $('viewer').showModal(); showViewer(); }
+async function showViewer(){
+  const id = curId(); if (id === null) return;
+  const it = S.items[id];
+  $('vInfo').textContent = `${it.name} · ${fmtSize(it.size)} · ${it.date.toLocaleString('en-GB')} (${it.dateSrc}) · ${it.path||'root'} · ${it.status.toUpperCase()}`;
+  const stage = $('vStage');
+  if (NOPREVIEW.test(it.name)) { stage.innerHTML = '<div class="info">No preview for this format.</div>'; return; }
+  try {
+    const f = await it.file.getFile();
+    const url = URL.createObjectURL(f);
+    stage.innerHTML = it.kind === 'video'
+      ? `<video src="${url}" controls style="max-width:100%;max-height:100%;border-radius:8px"></video>`
+      : `<img src="${url}" alt="">`;
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch(e){ stage.innerHTML = '<div class="info">Could not open file.</div>'; }
+}
+$('vClose').onclick = () => $('viewer').close();
+$('vPrev').onclick = () => move(-1);
+$('vNext').onclick = () => move(1);
+$('vKeep').onclick = () => { const id = curId(); if (id!==null){ setStatus(id,'keep'); move(1); } };
+$('vRej').onclick  = () => { const id = curId(); if (id!==null){ setStatus(id,'reject'); move(1); } };
+
+/* ---------- stats & progress ---------- */
+function stats(){
+  let keep = 0, rej = 0, kb = 0, rb = 0;
+  for (const it of S.items) {
+    if (it.status === 'keep') { keep++; kb += it.size; } else { rej++; rb += it.size; }
+  }
+  return { keep, rej, kb, rb };
+}
+function renderStats(){
+  const s = stats();
+  $('stats').innerHTML = `<b>${s.keep}</b> keep (${fmtSize(s.kb)}) · <b>${s.rej}</b> reject (${fmtSize(s.rb)}) · <b>${S.items.length}</b> total`;
+}
+function progress(f){ $('progBar').style.width = Math.round(Math.min(1,Math.max(0,f))*100) + '%'; }
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+/* ---------- write ---------- */
+$('btnRun').onclick = async () => {
+  if (S.busy) return;
+  const mv = $('optMove').checked;
+  const s = stats();
+  if (!confirm(
+    `${mv ? 'MOVE' : 'COPY'} ${S.items.length} files into "${S.dstHandle.name}"?\n\n` +
+    `• ${s.keep} kept files → YYYY/YYYY-MM/, Screenshots/, Videos/\n` +
+    `• ${s.rej} rejected files → _Rejected/ (not deleted)\n\n` +
+    (mv ? 'Source files will be removed only after each copy is verified.' : 'Source files stay untouched.')
+  )) return;
+
+  S.busy = true;
+  $('btnRun').disabled = true;
+  $('log').textContent = '';
+  log(`${mv ? 'Moving' : 'Copying'} ${S.items.length} files …`);
+
+  const dirs = new Map();
+  const getDir = async segs => {
+    const key = segs.join('/');
+    if (dirs.has(key)) return dirs.get(key);
+    let d = S.dstHandle;
+    for (const seg of segs) d = await d.getDirectoryHandle(seg, { create:true });
+    dirs.set(key, d);
+    return d;
+  };
+  const used = new Set();
+  let done = 0, ok = 0, fail = 0, removed = 0;
+
+  for (const it of S.items) {
+    try {
+      const segs = destSegs(it);
+      const dir = await getDir(segs);
+      let base = destName(it);
+      let name = base, i = 1;
+      while (used.has(segs.join('/') + '/' + name)) {
+        const dot = base.lastIndexOf('.');
+        name = base.slice(0, dot) + '_' + (++i) + base.slice(dot);
+      }
+      used.add(segs.join('/') + '/' + name);
+
+      const src = await it.file.getFile();
+      const fh = await dir.getFileHandle(name, { create:true });
+      const w = await fh.createWritable();
+      await src.stream().pipeTo(w);
+
+      const check = await fh.getFile();
+      if (check.size !== it.size) throw new Error(`size mismatch ${check.size} vs ${it.size}`);
+      ok++;
+
+      if (mv) {
+        try { await it.parent.removeEntry(it.name); removed++; }
+        catch(e){ log(`  kept source (could not delete): ${it.name} — ${e.message}`); }
+      }
+    } catch(e){
+      fail++;
+      log(`  FAILED ${it.name}: ${e.message}`, 'er');
+    }
+    if (++done % 25 === 0 || done === S.items.length) { progress(done / S.items.length); await tick(); }
+  }
+
+  log(`Done. ${ok} written, ${fail} failed${mv ? `, ${removed} removed from source` : ''}.`, fail ? 'er' : 'ok');
+  if (fail) log('Nothing was deleted for the failed files — rerun to retry them.');
+  S.busy = false;
+  $('btnRun').disabled = false;
+};
+
+function destSegs(it){
+  if (it.status === 'reject') {
+    const why = it.dupOf !== null ? 'Duplicates' : JUNKY.has(it.kind) ? cap(it.kind) : 'Rejected';
+    return ['_Rejected', why];
+  }
+  if (it.kind === 'video') return ['Videos', String(it.date.getFullYear())];
+  if (JUNKY.has(it.kind)) return [cap(it.kind), String(it.date.getFullYear())];
+  const y = String(it.date.getFullYear());
+  return [y, y + '-' + pad(it.date.getMonth()+1)];
+}
+const cap = s => ({ screenshot:'Screenshots', whatsapp:'WhatsApp', social:'Social', download:'Downloads' }[s] || 'Other');
+function destName(it){
+  const d = it.date;
+  const ext = (it.name.match(/\.[^.]+$/) || ['.jpg'])[0].toLowerCase();
+  const stamp = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  return stamp + ext;
+}
+</script>
+</body>
+</html>
